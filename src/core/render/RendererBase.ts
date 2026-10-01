@@ -10,6 +10,6 @@ export interface RenderOptions {
 
 /** Shared contract so Canvas2D and WebGL backends are interchangeable from the Viewport's point of view. */
 export interface RendererBase {
-  draw(buffer: CellBuffer, binCount: number, atlas: ShapeAtlas | null, options: RenderOptions): void
+  draw(buffer: CellBuffer, atlas: ShapeAtlas | null, options: RenderOptions): void
   dispose?(): void
 }

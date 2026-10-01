@@ -2,26 +2,20 @@ import { useEffect, useRef } from 'react'
 
 import { createCellBuffer, ensureCellBufferSize, type CellBuffer } from '../../core/grid/CellBuffer'
 import { applyNoise, computeGridLayout } from '../../core/grid/GridModel'
-import { applyEdgeRotation, applyEdgeScaleModulation, computeSobelEdges } from '../../core/quantize/EdgeDetector'
-import { applyLuminanceRotation, applyToneFilters, computeLuminance, quantizeToShapeIndex } from '../../core/quantize/Quantizer'
+import { applyToneFilters, computeLuminance, quantizeToShapeIndex } from '../../core/quantize/Quantizer'
 import { equalWidthThresholds } from '../../core/quantize/Thresholds'
 import { Canvas2DRenderer } from '../../core/render/Canvas2DRenderer'
+import { computeOutputSize, type OutputSize } from '../../core/render/outputSize'
 import type { RendererBase } from '../../core/render/RendererBase'
 import { buildShapeAtlas, type ShapeAtlas } from '../../core/render/ShapeAtlas'
 import { applyForegroundTint } from '../../core/render/Tint'
 import { WebGLRenderer } from '../../core/render/WebGLRenderer'
 import { MediaSampler } from '../../core/sampling/MediaSampler'
 import { startVideoFrameLoop, type VideoFrameLoopHandle } from '../../core/sampling/VideoFrameLoop'
+import { useStoreSlice } from '../../hooks/useStoreSlice'
 import { resourceRegistry } from '../../state/resources/ResourceRegistry'
 import { appStore } from '../../state/store'
-import type { MediaType, ShapeSlot } from '../../types'
-
-export const VIEWPORT_WIDTH = 768
-export const VIEWPORT_HEIGHT = 768
-
-// No shape-upload UI yet when this bin count was introduced — now also the
-// fallback when the shape slots are empty, so there's always something to see.
-const PLACEHOLDER_BIN_COUNT = 5
+import { SHAPE_SLOT_COUNT, type MediaType, type ShapeSlots } from '../../types'
 
 // Per the approved architecture: WebGL instancing kicks in above this cell
 // count, or whenever the source is video — Canvas2D handles small previews.
@@ -34,12 +28,12 @@ let atlas: ShapeAtlas | null = null
 let atlasKey = ''
 let atlasBuilding = false
 
-function shapesKey(slots: ShapeSlot[]): string {
-  return slots.map((slot) => `${slot.id}:${slot.resourceId}`).join('|')
+function shapesKey(slots: ShapeSlots): string {
+  return slots.map((slot) => (slot ? `${slot.id}:${slot.resourceId}` : 'empty')).join('|')
 }
 
 /** Kicks off an async atlas rebuild when the shape slots changed; `onReady` fires once it lands. */
-function ensureAtlas(slots: ShapeSlot[], onReady: () => void): void {
+function ensureAtlas(slots: ShapeSlots, onReady: () => void): void {
   const key = shapesKey(slots)
   if (key === atlasKey || atlasBuilding) return
 
@@ -66,6 +60,11 @@ export function shouldUseWebGL(cols: number, rows: number, mediaType: MediaType)
   return cols * rows > WEBGL_CELL_THRESHOLD || isLiveSource(mediaType)
 }
 
+/** Current output pixel dimensions — exporters build at this size (or a multiple of it). */
+export function getViewportSize(): OutputSize {
+  return computeOutputSize(appStore.getState().output)
+}
+
 /**
  * One full sample -> quantize -> tint -> draw pass against the current store
  * state, against whichever renderer backend is passed in. Exported
@@ -74,11 +73,9 @@ export function shouldUseWebGL(cols: number, rows: number, mediaType: MediaType)
  * hidden/backgrounded tabs.
  */
 export function renderFrame(renderer: RendererBase, onAtlasReady?: () => void): void {
-  const { grid, media, color, filters, noise, shapes } = appStore.getState()
+  const { grid, media, color, filters, noise, shapes, output } = appStore.getState()
 
   ensureAtlas(shapes.slots, () => onAtlasReady?.())
-
-  const binCount = shapes.slots.length > 0 ? shapes.slots.length : PLACEHOLDER_BIN_COUNT
 
   buffer = ensureCellBufferSize(buffer, grid.density.cols, grid.density.rows)
   computeGridLayout(buffer, grid)
@@ -96,38 +93,23 @@ export function renderFrame(renderer: RendererBase, onAtlasReady?: () => void): 
 
   computeLuminance(buffer)
   applyToneFilters(buffer, filters)
-
-  // Either control can independently request the Sobel pass: the Filters
-  // panel toggle (drives scale modulation) and the Grid panel's "By edge"
-  // rotation mode are deliberately decoupled, same as "By luminance" is its
-  // own independent rotation mode.
-  if (filters.edgeDetection.enabled || grid.rotation.mode === 'edge') {
-    computeSobelEdges(buffer)
-  }
-  if (filters.edgeDetection.enabled) {
-    applyEdgeScaleModulation(buffer, { threshold: filters.edgeDetection.threshold })
-  }
-  if (grid.rotation.mode === 'luminance') applyLuminanceRotation(buffer)
-  else if (grid.rotation.mode === 'edge') applyEdgeRotation(buffer)
-
   applyForegroundTint(buffer, color)
 
-  const thresholds = grid.thresholds.length === binCount - 1 ? grid.thresholds : equalWidthThresholds(binCount)
-  quantizeToShapeIndex(buffer, { thresholds, invert: color.invert })
+  const thresholds =
+    grid.thresholds.length === SHAPE_SLOT_COUNT - 1 ? grid.thresholds : equalWidthThresholds(SHAPE_SLOT_COUNT)
+  quantizeToShapeIndex(buffer, { thresholds })
 
-  const activeAtlas = shapes.slots.length > 0 ? atlas : null
-  renderer.draw(buffer, binCount, activeAtlas, {
-    width: VIEWPORT_WIDTH,
-    height: VIEWPORT_HEIGHT,
+  const size = computeOutputSize(output)
+  renderer.draw(buffer, atlas, {
+    width: size.width,
+    height: size.height,
     background: color.background,
   })
 }
 
 /** Snapshot of exactly what was last rendered — exporters build from this instead of re-running the pipeline. */
-export function getCurrentFrame(): { buffer: CellBuffer; atlas: ShapeAtlas | null; binCount: number } {
-  const { shapes } = appStore.getState()
-  const binCount = shapes.slots.length > 0 ? shapes.slots.length : PLACEHOLDER_BIN_COUNT
-  return { buffer, atlas: shapes.slots.length > 0 ? atlas : null, binCount }
+export function getCurrentFrame(): { buffer: CellBuffer; atlas: ShapeAtlas | null } {
+  return { buffer, atlas }
 }
 
 let activeCanvasEl: HTMLCanvasElement | null = null
@@ -135,6 +117,12 @@ let activeCanvasEl: HTMLCanvasElement | null = null
 /** The canvas currently being drawn to by the live rAF loop (Canvas2D or WebGL) — the correct one to captureStream(). */
 export function getActiveCanvas(): HTMLCanvasElement | null {
   return activeCanvasEl
+}
+
+function ensureCanvasPixelSize(canvas: HTMLCanvasElement, size: OutputSize): void {
+  if (canvas.width === size.width && canvas.height === size.height) return
+  canvas.width = size.width
+  canvas.height = size.height
 }
 
 /**
@@ -145,10 +133,16 @@ export function getActiveCanvas(): HTMLCanvasElement | null {
  * backend can switch live by toggling which canvas is visible. React mounts
  * both once and never re-renders them — store changes mark a dirty flag that
  * the rAF loop checks, so slider drags never ride React's reconciliation.
+ *
+ * The wrapper <div>'s CSS size DOES come from React (via useStoreSlice) since
+ * aspect-ratio changes are a discrete, rare action, not a per-frame concern —
+ * only the canvases' internal pixel resolution is managed imperatively.
  */
 export function Viewport() {
   const canvas2DRef = useRef<HTMLCanvasElement>(null)
   const webglRef = useRef<HTMLCanvasElement>(null)
+  const output = useStoreSlice((state) => state.output)
+  const size = computeOutputSize(output)
 
   useEffect(() => {
     const canvas2DEl = canvas2DRef.current
@@ -221,7 +215,11 @@ export function Viewport() {
       if (!dirty) return
       dirty = false
 
-      const { grid, media } = appStore.getState()
+      const { grid, media, output: currentOutput } = appStore.getState()
+      const currentSize = computeOutputSize(currentOutput)
+      ensureCanvasPixelSize(canvas2DEl!, currentSize)
+      ensureCanvasPixelSize(webglEl!, currentSize)
+
       const useWebGL =
         Boolean(webglRenderer) && !webglContextLost && shouldUseWebGL(grid.density.cols, grid.density.rows, media.type)
 
@@ -246,19 +244,12 @@ export function Viewport() {
   }, [])
 
   return (
-    <div className="relative" style={{ width: VIEWPORT_WIDTH, height: VIEWPORT_HEIGHT }}>
-      <canvas
-        ref={canvas2DRef}
-        width={VIEWPORT_WIDTH}
-        height={VIEWPORT_HEIGHT}
-        className="absolute inset-0 rounded-lg border border-neutral-800 bg-black"
-      />
-      <canvas
-        ref={webglRef}
-        width={VIEWPORT_WIDTH}
-        height={VIEWPORT_HEIGHT}
-        className="absolute inset-0 rounded-lg border border-neutral-800 bg-black"
-      />
+    <div
+      className="relative mx-auto w-full"
+      style={{ aspectRatio: `${size.width} / ${size.height}`, maxWidth: size.width, maxHeight: '70vh' }}
+    >
+      <canvas ref={canvas2DRef} className="absolute inset-0 h-full w-full rounded-lg border border-neutral-800 bg-black" />
+      <canvas ref={webglRef} className="absolute inset-0 h-full w-full rounded-lg border border-neutral-800 bg-black" />
     </div>
   )
 }

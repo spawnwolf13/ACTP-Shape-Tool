@@ -9,6 +9,7 @@ import type {
   HistoryMetaState,
   MediaState,
   NoiseState,
+  OutputState,
   ShapesState,
   UIState,
 } from '../types'
@@ -18,6 +19,7 @@ import { defaultFiltersState } from './slices/filtersSlice'
 import { defaultGridState } from './slices/gridSlice'
 import { defaultMediaState } from './slices/mediaSlice'
 import { defaultNoiseState } from './slices/noiseSlice'
+import { defaultOutputState } from './slices/outputSlice'
 import { defaultShapesState } from './slices/shapesSlice'
 import { defaultUIState } from './slices/uiSlice'
 import { HistoryManager } from './history/HistoryManager'
@@ -30,6 +32,7 @@ export interface AppData {
   color: ColorState
   filters: FiltersState
   noise: NoiseState
+  output: OutputState
   /** Ephemeral — excluded from undo/redo history. */
   exportState: ExportState
   /** Ephemeral — excluded from undo/redo history. */
@@ -57,7 +60,7 @@ export interface AppActions {
 export type AppStore = AppData & { actions: AppActions }
 
 /** Slices whose mutations are tracked by undo/redo. exportState/ui are deliberately excluded. */
-const HISTORY_SLICES = new Set<string>(['media', 'shapes', 'grid', 'color', 'filters', 'noise'])
+const HISTORY_SLICES = new Set<string>(['media', 'shapes', 'grid', 'color', 'filters', 'noise', 'output'])
 
 function createDefaultData(): AppData {
   return {
@@ -67,6 +70,7 @@ function createDefaultData(): AppData {
     color: defaultColorState(),
     filters: defaultFiltersState(),
     noise: defaultNoiseState(),
+    output: defaultOutputState(),
     exportState: defaultExportState(),
     ui: defaultUIState(),
     historyMeta: { undoCount: 0, redoCount: 0 },

@@ -133,53 +133,50 @@ export class WebGLRenderer implements RendererBase {
     this.uploadedAtlasVersion = -1
   }
 
-  draw(buffer: CellBuffer, binCount: number, atlas: ShapeAtlas | null, options: RenderOptions): void {
+  draw(buffer: CellBuffer, atlas: ShapeAtlas | null, options: RenderOptions): void {
     if (this.contextLost || this.gl.isContextLost()) return
 
     const gl = this.gl
     const { width, height, background } = options
-    const hasAtlas = Boolean(atlas && atlas.count > 0)
-    const count = buffer.count
 
     gl.viewport(0, 0, width, height)
     gl.clearColor(background.r / 255, background.g / 255, background.b / 255, background.a)
     gl.clear(gl.COLOR_BUFFER_BIT)
 
+    if (!atlas) return
+
+    const count = buffer.count
     this.ensureScratchSize(count)
 
     const cellWidth = width / buffer.cols
     const cellHeight = height / buffer.rows
-    const baseSize = Math.min(cellWidth, cellHeight)
+    const baseSize = Math.min(cellWidth, cellHeight) * 0.9
 
     for (let i = 0; i < count; i++) {
       this.posScratch[i * 2] = buffer.posX[i] * width
       this.posScratch[i * 2 + 1] = buffer.posY[i] * height
-
-      const binFraction = hasAtlas ? 1 : binCount > 1 ? (buffer.shapeIndex[i] + 1) / binCount : 1
-      this.sizeScratch[i] = baseSize * binFraction * buffer.scale[i] * 0.9
+      this.sizeScratch[i] = baseSize * buffer.scale[i]
 
       this.colorScratch[i * 4] = buffer.colorR[i] / 255
       this.colorScratch[i * 4 + 1] = buffer.colorG[i] / 255
       this.colorScratch[i * 4 + 2] = buffer.colorB[i] / 255
       this.colorScratch[i * 4 + 3] = buffer.colorA[i] / 255
 
-      this.shapeIndexScratch[i] = hasAtlas ? Math.min(buffer.shapeIndex[i], atlas!.count - 1) : 0
+      this.shapeIndexScratch[i] = Math.min(buffer.shapeIndex[i], atlas.count - 1)
     }
 
     gl.useProgram(this.program)
     gl.uniform2f(this.uViewportSize, width, height)
-    gl.uniform1i(this.uHasAtlas, hasAtlas ? 1 : 0)
-    gl.uniform1f(this.uShapeCount, hasAtlas ? atlas!.count : 1)
+    gl.uniform1i(this.uHasAtlas, 1)
+    gl.uniform1f(this.uShapeCount, atlas.count)
 
-    if (hasAtlas && atlas) {
-      gl.activeTexture(gl.TEXTURE0)
-      gl.bindTexture(gl.TEXTURE_2D, this.atlasTexture)
-      if (this.uploadedAtlasVersion !== atlas.version) {
-        gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, gl.RGBA, gl.UNSIGNED_BYTE, atlas.canvas as TexImageSource)
-        this.uploadedAtlasVersion = atlas.version
-      }
-      gl.uniform1i(this.uAtlas, 0)
+    gl.activeTexture(gl.TEXTURE0)
+    gl.bindTexture(gl.TEXTURE_2D, this.atlasTexture)
+    if (this.uploadedAtlasVersion !== atlas.version) {
+      gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, gl.RGBA, gl.UNSIGNED_BYTE, atlas.canvas as TexImageSource)
+      this.uploadedAtlasVersion = atlas.version
     }
+    gl.uniform1i(this.uAtlas, 0)
 
     // Static, non-instanced base quad geometry (divisor 0).
     gl.bindBuffer(gl.ARRAY_BUFFER, this.quadBuffer)

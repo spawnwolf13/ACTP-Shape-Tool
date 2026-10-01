@@ -23,7 +23,6 @@ export interface SVGExportOptions {
  */
 export function exportSVG(buffer: CellBuffer, atlas: ShapeAtlas | null, options: SVGExportOptions): string {
   const { width, height, background } = options
-  const hasAtlas = Boolean(atlas && atlas.count > 0)
 
   const parts: string[] = []
   parts.push(
@@ -31,46 +30,43 @@ export function exportSVG(buffer: CellBuffer, atlas: ShapeAtlas | null, options:
   )
   parts.push(`<rect width="${width}" height="${height}" fill="${rgbaToCss(background)}"/>`)
 
-  if (hasAtlas && atlas) {
-    parts.push('<defs>')
-    for (let i = 0; i < atlas.count; i++) {
-      const dataUrl = silhouetteDataURL(atlas, i)
-      parts.push(
-        `<mask id="shape-mask-${i}" maskUnits="userSpaceOnUse" x="0" y="0" width="1" height="1">` +
-          `<image href="${dataUrl}" width="1" height="1"/></mask>`,
-      )
-      parts.push(`<rect id="shape-${i}" width="1" height="1" mask="url(#shape-mask-${i})"/>`)
-    }
-    parts.push('</defs>')
+  if (!atlas) {
+    parts.push('</svg>')
+    return parts.join('')
   }
+
+  parts.push('<defs>')
+  for (let i = 0; i < atlas.count; i++) {
+    const dataUrl = silhouetteDataURL(atlas, i)
+    parts.push(
+      `<mask id="shape-mask-${i}" maskUnits="userSpaceOnUse" x="0" y="0" width="1" height="1">` +
+        `<image href="${dataUrl}" width="1" height="1"/></mask>`,
+    )
+    parts.push(`<rect id="shape-${i}" width="1" height="1" mask="url(#shape-mask-${i})"/>`)
+  }
+  parts.push('</defs>')
 
   const cellWidth = width / buffer.cols
   const cellHeight = height / buffer.rows
-  const baseSize = Math.min(cellWidth, cellHeight)
-  const fallbackBinCount = hasAtlas ? atlas!.count : 1
+  const baseSize = Math.min(cellWidth, cellHeight) * 0.9
 
   for (let i = 0; i < buffer.count; i++) {
     const alpha = buffer.colorA[i] / 255
     if (alpha <= 1 / 255) continue
 
-    const cx = buffer.posX[i] * width
-    const cy = buffer.posY[i] * height
-    const binFraction = hasAtlas ? 1 : fallbackBinCount > 1 ? (buffer.shapeIndex[i] + 1) / fallbackBinCount : 1
-    const size = baseSize * binFraction * buffer.scale[i] * 0.9
+    const size = baseSize * buffer.scale[i]
     if (size <= 0.5) continue
 
+    const cx = buffer.posX[i] * width
+    const cy = buffer.posY[i] * height
     const rotationDeg = (buffer.rotation[i] * 180) / Math.PI
     const fill = `rgb(${buffer.colorR[i]},${buffer.colorG[i]},${buffer.colorB[i]})`
     const opacityAttr = alpha < 1 - 1 / 255 ? ` fill-opacity="${round2(alpha)}"` : ''
     // Local 1x1 square: recenter to origin, scale to pixel size, rotate, then place at the cell center.
     const transform = `translate(${round2(cx)} ${round2(cy)}) rotate(${round2(rotationDeg)}) scale(${round2(size)}) translate(-0.5 -0.5)`
+    const shapeIndex = Math.min(buffer.shapeIndex[i], atlas.count - 1)
 
-    if (hasAtlas) {
-      const shapeIndex = Math.min(buffer.shapeIndex[i], atlas!.count - 1)
-      parts.push(`<use href="#shape-${shapeIndex}" transform="${transform}" fill="${fill}"${opacityAttr}/>`)
-    } else {
-      parts.push(`<rect width="1" height="1" transform="${transform}" fill="${fill}"${opacityAttr}/>`)
-    }
+    parts.push(`<use href="#shape-${shapeIndex}" transform="${transform}" fill="${fill}"${opacityAttr}/>`)
   }
 
   parts.push('</svg>')

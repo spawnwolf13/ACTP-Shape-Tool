@@ -22,7 +22,6 @@ export interface ImageExportOptions {
  */
 export async function exportImage(
   buffer: CellBuffer,
-  binCount: number,
   atlas: ShapeAtlas | null,
   options: ImageExportOptions,
 ): Promise<Blob> {
@@ -35,7 +34,7 @@ export async function exportImage(
   canvas.height = height
 
   const renderer = new WebGLRenderer(canvas)
-  renderer.draw(buffer, binCount, atlas, { width, height, background })
+  renderer.draw(buffer, atlas, { width, height, background })
 
   const mimeType = format === 'jpeg' ? 'image/jpeg' : 'image/png'
   const blob = await new Promise<Blob>((resolve, reject) => {

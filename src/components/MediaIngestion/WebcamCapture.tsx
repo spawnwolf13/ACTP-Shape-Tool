@@ -34,6 +34,7 @@ export function WebcamCapture() {
 
       actions.setPath(['media', 'type'], 'webcam', { immediate: true, label: 'Start webcam' })
       actions.setPath(['media', 'resourceId'], resourceId, { immediate: true })
+      actions.setPath(['media', 'name'], 'Webcam', { immediate: true })
       actions.setPath(['media', 'naturalWidth'], video.videoWidth, { immediate: true })
       actions.setPath(['media', 'naturalHeight'], video.videoHeight, { immediate: true })
       actions.setPath(['media', 'isPlaying'], true, { immediate: true })
@@ -46,6 +47,7 @@ export function WebcamCapture() {
     releaseMediaResource(media.resourceId)
     actions.setPath(['media', 'type'], null, { immediate: true, label: 'Stop webcam' })
     actions.setPath(['media', 'resourceId'], null, { immediate: true })
+    actions.setPath(['media', 'name'], null, { immediate: true })
     actions.setPath(['media', 'isPlaying'], false, { immediate: true })
   }
 

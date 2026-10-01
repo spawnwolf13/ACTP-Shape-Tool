@@ -2,6 +2,6 @@ import type { ShapesState } from '../../types'
 
 export function defaultShapesState(): ShapesState {
   return {
-    slots: [],
+    slots: [null, null, null, null],
   }
 }

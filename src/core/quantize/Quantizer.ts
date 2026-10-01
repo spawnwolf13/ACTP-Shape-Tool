@@ -13,40 +13,23 @@ export function computeLuminance(buffer: CellBuffer): void {
 }
 
 export interface ToneFilterOptions {
-  /** Additive, roughly -1..1. */
-  brightness: number
   /** Roughly -1..1; 0 = neutral, scales contrast around the 0.5 midpoint. */
   contrast: number
-  /** >0; 1 = neutral. */
-  gamma: number
 }
 
-/** Applies brightness/contrast/gamma to luminance in place. Run after computeLuminance, before quantizing. */
+/** Applies contrast to luminance in place. Run after computeLuminance, before quantizing. */
 export function applyToneFilters(buffer: CellBuffer, filters: ToneFilterOptions): void {
   const { luminance, count } = buffer
-  const { brightness, contrast, gamma } = filters
-  const contrastFactor = 1 + contrast
+  const contrastFactor = 1 + filters.contrast
 
   for (let i = 0; i < count; i++) {
-    let y = (luminance[i] - 0.5) * contrastFactor + 0.5 + brightness
-    y = clamp01(y)
-    if (gamma !== 1) y = Math.pow(y, 1 / gamma)
-    luminance[i] = clamp01(y)
-  }
-}
-
-/** Maps luminance to a full-turn rotation. Call only when grid.rotation.mode === 'luminance'. */
-export function applyLuminanceRotation(buffer: CellBuffer): void {
-  const { luminance, rotation, count } = buffer
-  for (let i = 0; i < count; i++) {
-    rotation[i] = luminance[i] * Math.PI * 2
+    luminance[i] = clamp01((luminance[i] - 0.5) * contrastFactor + 0.5)
   }
 }
 
 export interface QuantizeOptions {
   /** Ascending cut points in (0,1), length = shapeCount - 1. */
   thresholds: number[]
-  invert?: boolean
 }
 
 /**
@@ -56,11 +39,11 @@ export interface QuantizeOptions {
  */
 export function quantizeToShapeIndex(buffer: CellBuffer, options: QuantizeOptions): void {
   const { luminance, shapeIndex, count } = buffer
-  const { thresholds, invert = false } = options
+  const { thresholds } = options
   const binCount = thresholds.length + 1
 
   for (let i = 0; i < count; i++) {
-    const y = invert ? 1 - luminance[i] : luminance[i]
+    const y = luminance[i]
     let bin = 0
     while (bin < thresholds.length && y >= thresholds[bin]) bin++
     shapeIndex[i] = Math.min(bin, binCount - 1)

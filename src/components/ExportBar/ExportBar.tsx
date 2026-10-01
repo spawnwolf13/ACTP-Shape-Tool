@@ -3,7 +3,7 @@ import { useEffect, useRef, useState } from 'react'
 import { exportImage, type ExportScale } from '../../core/export/ImageExporter'
 import { exportSVG } from '../../core/export/SVGExporter'
 import { pickSupportedMimeType, VideoRecorder } from '../../core/export/VideoRecorder'
-import { getActiveCanvas, getCurrentFrame, VIEWPORT_HEIGHT, VIEWPORT_WIDTH } from '../Viewport/Viewport'
+import { getActiveCanvas, getCurrentFrame, getViewportSize } from '../Viewport/Viewport'
 import { useStoreSlice } from '../../hooks/useStoreSlice'
 import { Button } from '../common/Button'
 import { RecordingIndicator } from './RecordingIndicator'
@@ -19,7 +19,8 @@ function downloadBlob(blob: Blob, filename: string): void {
 
 function buildSVGString(background: { r: number; g: number; b: number; a: number }): string {
   const { buffer, atlas } = getCurrentFrame()
-  return exportSVG(buffer, atlas, { width: VIEWPORT_WIDTH, height: VIEWPORT_HEIGHT, background })
+  const size = getViewportSize()
+  return exportSVG(buffer, atlas, { width: size.width, height: size.height, background })
 }
 
 /** Save as SVG, copy SVG to clipboard, download PNG at 1x/2x/4x, and record the live canvas to video. */
@@ -36,7 +37,7 @@ export function ExportBar() {
 
   const isLiveSource = media.type === 'video' || media.type === 'webcam'
   const svgDisabled = isLiveSource && media.isPlaying
-  const canRecord = pickSupportedMimeType() !== null
+  const canRecord = isLiveSource && pickSupportedMimeType() !== null
 
   function handleSaveSVG() {
     downloadBlob(new Blob([buildSVGString(color.background)], { type: 'image/svg+xml' }), 'mosaic.svg')
@@ -53,10 +54,11 @@ export function ExportBar() {
   }
 
   async function handleDownloadImage(scale: ExportScale) {
-    const { buffer, atlas, binCount } = getCurrentFrame()
-    const blob = await exportImage(buffer, binCount, atlas, {
-      baseWidth: VIEWPORT_WIDTH,
-      baseHeight: VIEWPORT_HEIGHT,
+    const { buffer, atlas } = getCurrentFrame()
+    const size = getViewportSize()
+    const blob = await exportImage(buffer, atlas, {
+      baseWidth: size.width,
+      baseHeight: size.height,
       scale,
       background: color.background,
       format: 'png',
@@ -109,8 +111,10 @@ export function ExportBar() {
   }, [])
 
   return (
-    <div className="flex flex-wrap items-center gap-3 rounded-lg border border-neutral-800 bg-neutral-900 px-4 py-3">
-      <div className="flex items-center gap-2">
+    <div className="flex flex-col gap-2">
+      <h3 className="text-xs font-semibold uppercase tracking-wide text-neutral-500">Export</h3>
+
+      <div className="flex flex-wrap items-center gap-2">
         <Button onClick={handleSaveSVG} disabled={svgDisabled} title={svgDisabled ? 'Pause to export SVG' : undefined}>
           Save as SVG
         </Button>
@@ -126,25 +130,27 @@ export function ExportBar() {
         <Button onClick={() => handleDownloadImage(4)}>4x</Button>
       </div>
 
-      <div className="flex items-center gap-2">
-        {canRecord ? (
-          isRecording ? (
-            <>
-              <RecordingIndicator seconds={recordSeconds} />
-              <Button variant="danger" onClick={stopRecording}>
-                Stop
+      {isLiveSource && (
+        <div className="flex items-center gap-2">
+          {canRecord ? (
+            isRecording ? (
+              <>
+                <RecordingIndicator seconds={recordSeconds} />
+                <Button variant="danger" onClick={stopRecording}>
+                  Stop
+                </Button>
+              </>
+            ) : (
+              <Button variant="primary" onClick={startRecording}>
+                Record Video
               </Button>
-            </>
+            )
           ) : (
-            <Button variant="primary" onClick={startRecording}>
-              Record Video
-            </Button>
-          )
-        ) : (
-          <span className="text-xs text-neutral-600">Recording unsupported in this browser</span>
-        )}
-        {recordError && <span className="text-xs text-red-400">{recordError}</span>}
-      </div>
+            <span className="text-xs text-neutral-600">Recording unsupported in this browser</span>
+          )}
+          {recordError && <span className="text-xs text-red-400">{recordError}</span>}
+        </div>
+      )}
     </div>
   )
 }
