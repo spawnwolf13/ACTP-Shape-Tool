@@ -5,19 +5,21 @@ const COMMENT_PATTERN = /<!--[\s\S]*?-->/g
 /**
  * Parses an uploaded SVG's raw text into its native viewBox + inner markup
  * (paths/groups/etc., no outer <svg> wrapper) — ready to splice straight
- * into an exported <symbol>, preserving the original vector geometry
- * instead of rasterizing it.
+ * into the exported SVG, preserving the original vector geometry instead of
+ * rasterizing it.
  *
  * Every `id` in the markup is namespaced with `prefix` (and every
  * same-document reference to it — `url(#id)`, `href="#id"` — rewritten to
- * match), since multiple independently-uploaded shapes end up sharing one
- * exported <defs> and would otherwise collide. Explicit `fill` (the common
+ * match), since multiple independently-uploaded shapes can end up in the
+ * same document and would otherwise collide. Explicit `fill` (the common
  * case for solid icon SVGs) is stripped from descendants — but `fill="none"`
- * is preserved — so the per-cell tint on the <use> element's own `fill`
- * cascades through correctly instead of being shadowed by the source
- * artwork's original color. <script> elements and `on*` handlers are
- * stripped too: this markup is spliced verbatim into a file the user may
- * reopen as a live SVG document, not just viewed as a raster preview.
+ * is preserved — so each shape inherits its color from a single ancestor
+ * `fill` set once at export time (see SVGExporter's "Shapes" group) via
+ * plain SVG fill inheritance, not currentColor or <use>/<symbol>
+ * inheritance, both of which Adobe Illustrator's SVG importer resolves
+ * unreliably. <script> elements and `on*` handlers are stripped too: this
+ * markup is spliced verbatim into a file the user may reopen as a live SVG
+ * document, not just viewed as a raster preview.
  */
 export function parseSVGVectorSource(svgText: string, prefix: string): VectorShapeSource | null {
   const doc = new DOMParser().parseFromString(svgText, 'image/svg+xml')
@@ -72,23 +74,17 @@ function sanitizeDescendants(root: Element): void {
     for (const attr of Array.from(el.attributes)) {
       if (/^on/i.test(attr.name)) {
         el.removeAttribute(attr.name)
+      } else if (attr.name === 'fill' && attr.value.trim().toLowerCase() !== 'none') {
+        // Strip the source artwork's own color (solid or gradient) so the
+        // element falls through to plain SVG fill inheritance from its
+        // ancestor at export time — deliberately not currentColor, which
+        // Illustrator's SVG importer doesn't reliably resolve.
+        el.removeAttribute('fill')
       } else if (attr.name === 'style' && attr.value) {
         const cleaned = attr.value.replace(/fill\s*:\s*(?!none\b)[^;]+;?/gi, '').trim()
         if (cleaned) el.setAttribute('style', cleaned)
         else el.removeAttribute('style')
       }
-    }
-
-    // Recolor explicitly via currentColor rather than relying on bare fill
-    // inheritance through <use>/<symbol> — browsers resolve that correctly,
-    // but Illustrator's SVG paste parser is inconsistent about it and can
-    // render the shape as solid black or an empty group. currentColor
-    // resolves from the `color`/`fill` the <use> element sets at instance
-    // time (see SVGExporter), so every element gets it explicitly unless
-    // it's deliberately unfilled (fill="none" — e.g. an outline icon's stroke path).
-    const fill = el.getAttribute('fill')
-    if (!fill || fill.trim().toLowerCase() !== 'none') {
-      el.setAttribute('fill', 'currentColor')
     }
   })
 }
