@@ -15,6 +15,11 @@ export function hexToRgb(hex: string): RGB {
   return { r: (num >> 16) & 255, g: (num >> 8) & 255, b: num & 255 }
 }
 
+export function rgbToHex({ r, g, b }: RGB): string {
+  const toHex = (channel: number) => Math.max(0, Math.min(255, Math.round(channel))).toString(16).padStart(2, '0')
+  return `#${toHex(r)}${toHex(g)}${toHex(b)}`
+}
+
 /** Linearly interpolates `stops` (arbitrary order) at position `t` in [0,1]. */
 export function sampleGradient(stops: GradientStop[], t: number): RGB {
   if (stops.length === 0) return { r: 255, g: 255, b: 255 }

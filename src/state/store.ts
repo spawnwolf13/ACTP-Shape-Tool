@@ -6,6 +6,7 @@ import type {
   ExportState,
   FiltersState,
   GridState,
+  HistoryMetaState,
   MediaState,
   NoiseState,
   ShapesState,
@@ -33,6 +34,8 @@ export interface AppData {
   exportState: ExportState
   /** Ephemeral — excluded from undo/redo history. */
   ui: UIState
+  /** Ephemeral — a reactive mirror of HistoryManager's own stacks, not a tracked slice itself. */
+  historyMeta: HistoryMetaState
 }
 
 export interface SetPathOptions {
@@ -66,6 +69,7 @@ function createDefaultData(): AppData {
     noise: defaultNoiseState(),
     exportState: defaultExportState(),
     ui: defaultUIState(),
+    historyMeta: { undoCount: 0, redoCount: 0 },
   }
 }
 
@@ -100,6 +104,9 @@ export const appStore = createStore<AppStore>()(
           }
           return next
         })
+      },
+      onStacksChanged: (undoCount, redoCount) => {
+        set((state) => ({ ...state, historyMeta: { undoCount, redoCount } }))
       },
     })
 

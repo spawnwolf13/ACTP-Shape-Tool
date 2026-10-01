@@ -6,6 +6,8 @@ export interface HistoryManagerOptions {
   applyPatches: (patches: Patch[]) => void
   debounceMs?: number
   maxEntries?: number
+  /** Fired whenever the effective undo/redo counts change, so UI can stay reactive without polling. */
+  onStacksChanged?: (undoCount: number, redoCount: number) => void
 }
 
 export interface RecordOptions {
@@ -34,11 +36,17 @@ export class HistoryManager {
   private readonly applyPatches: (patches: Patch[]) => void
   private readonly debounceMs: number
   private readonly maxEntries: number
+  private readonly onStacksChanged?: (undoCount: number, redoCount: number) => void
 
   constructor(options: HistoryManagerOptions) {
     this.applyPatches = options.applyPatches
     this.debounceMs = options.debounceMs ?? 400
     this.maxEntries = options.maxEntries ?? 50
+    this.onStacksChanged = options.onStacksChanged
+  }
+
+  private notify(): void {
+    this.onStacksChanged?.(this.getUndoCount(), this.getRedoCount())
   }
 
   record(path: Path, prev: unknown, next: unknown, options: RecordOptions = {}): void {
@@ -65,6 +73,7 @@ export class HistoryManager {
     } else {
       this.pendingTimer = setTimeout(() => this.flush(), this.debounceMs)
     }
+    this.notify()
   }
 
   /** Commits any pending patches as one history entry right now. */
@@ -87,6 +96,7 @@ export class HistoryManager {
     if (this.undoStack.length > this.maxEntries) {
       this.undoStack.shift()
     }
+    this.notify()
   }
 
   undo(): void {
@@ -95,6 +105,7 @@ export class HistoryManager {
     if (!command) return
     this.applyPatches(invertPatches(command.patches))
     this.redoStack.push(command)
+    this.notify()
   }
 
   redo(): void {
@@ -102,6 +113,7 @@ export class HistoryManager {
     if (!command) return
     this.applyPatches(command.patches)
     this.undoStack.push(command)
+    this.notify()
   }
 
   canUndo(): boolean {
@@ -112,6 +124,15 @@ export class HistoryManager {
     return this.redoStack.length > 0
   }
 
+  /** Pending (uncommitted) edits still count as one undoable step, since undo() flushes them first. */
+  getUndoCount(): number {
+    return this.undoStack.length + (this.pending.length > 0 ? 1 : 0)
+  }
+
+  getRedoCount(): number {
+    return this.redoStack.length
+  }
+
   reset(): void {
     if (this.pendingTimer) clearTimeout(this.pendingTimer)
     this.pendingTimer = null
@@ -119,5 +140,6 @@ export class HistoryManager {
     this.redoStack = []
     this.pending = []
     this.pendingLabel = DEFAULT_LABEL
+    this.notify()
   }
 }

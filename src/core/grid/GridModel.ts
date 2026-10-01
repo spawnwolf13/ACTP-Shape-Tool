@@ -1,4 +1,5 @@
-import type { GridState } from '../../types'
+import type { GridState, NoiseState } from '../../types'
+import { mulberry32 } from '../../utils/seededRandom'
 import type { CellBuffer } from './CellBuffer'
 
 /**
@@ -24,6 +25,33 @@ export function computeGridLayout(buffer: CellBuffer, grid: GridState): void {
       // Overwritten by Quantizer.applyLuminanceRotation when mode === 'luminance',
       // and will be overwritten by edge-driven rotation once EdgeDetector exists.
       buffer.rotation[index] = globalRotation
+    }
+  }
+}
+
+/**
+ * Perturbs posX/posY by `positionJitter` and multiplies `scale` by
+ * `scaleRandomness`, using a PRNG seeded from noise.seed — the same seed
+ * always reproduces the same jitter pattern. Must run after
+ * computeGridLayout, which sets the unperturbed baseline values this reads.
+ */
+export function applyNoise(buffer: CellBuffer, noise: NoiseState): void {
+  if (noise.positionJitter <= 0 && noise.scaleRandomness <= 0) return
+
+  const rand = mulberry32(noise.seed)
+  const cellWidth = 1 / buffer.cols
+  const cellHeight = 1 / buffer.rows
+
+  for (let i = 0; i < buffer.count; i++) {
+    if (noise.positionJitter > 0) {
+      const jitterX = (rand() * 2 - 1) * noise.positionJitter * cellWidth * 0.5
+      const jitterY = (rand() * 2 - 1) * noise.positionJitter * cellHeight * 0.5
+      buffer.posX[i] = clamp01(buffer.posX[i] + jitterX)
+      buffer.posY[i] = clamp01(buffer.posY[i] + jitterY)
+    }
+    if (noise.scaleRandomness > 0) {
+      const factor = 1 + (rand() * 2 - 1) * noise.scaleRandomness
+      buffer.scale[i] = Math.max(0, buffer.scale[i] * factor)
     }
   }
 }

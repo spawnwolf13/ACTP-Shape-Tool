@@ -90,3 +90,9 @@ export interface UIState {
   activeTab: string
   panelOpen: boolean
 }
+
+/** Reactive mirror of HistoryManager's stack sizes, so UI can read them without polling. */
+export interface HistoryMetaState {
+  undoCount: number
+  redoCount: number
+}

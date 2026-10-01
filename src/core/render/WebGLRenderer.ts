@@ -14,6 +14,13 @@ const ATTR_INSTANCE_ROTATION = 3
 const ATTR_INSTANCE_COLOR = 4
 const ATTR_INSTANCE_SHAPE_INDEX = 5
 
+export interface WebGLRendererCallbacks {
+  /** Fired when the GL context is lost (tab backgrounded, GPU reset, driver crash, …). Fall back to Canvas2D. */
+  onContextLost?: () => void
+  /** Fired after GL resources have been fully reinitialized post-restore. Safe to resume using this renderer. */
+  onContextRestored?: () => void
+}
+
 /**
  * Instanced-quad WebGL2 renderer. One draw call renders every cell: a static
  * unit quad is instanced cols*rows times, with per-instance position/size/
@@ -21,35 +28,73 @@ const ATTR_INSTANCE_SHAPE_INDEX = 5
  * ShapeAtlas bound as a single texture sampled per-fragment by shapeIndex —
  * this is what keeps 256x256 grids and live video at 60fps, versus the
  * Canvas2D path's per-cell draw calls.
+ *
+ * WebGL contexts can be lost at any time (tab backgrounding, GPU driver
+ * reset, resource pressure — a background tab losing its context is normal
+ * Chromium behavior, not an error). `webglcontextlost`/`webglcontextrestored`
+ * are handled here: on loss, draw() becomes a no-op and the caller is
+ * notified to fall back to Canvas2D; on restore, every GL resource (program,
+ * buffers, texture) is recreated from scratch against the same context
+ * object before resuming.
  */
 export class WebGLRenderer implements RendererBase {
-  private gl: WebGL2RenderingContext
-  private program: WebGLProgram
+  private readonly canvas: HTMLCanvasElement
+  private readonly gl: WebGL2RenderingContext
+  private readonly callbacks: WebGLRendererCallbacks
 
-  private quadBuffer: WebGLBuffer
-  private posBuffer: WebGLBuffer
-  private sizeBuffer: WebGLBuffer
-  private rotationBuffer: WebGLBuffer
-  private colorBuffer: WebGLBuffer
-  private shapeIndexBuffer: WebGLBuffer
-  private atlasTexture: WebGLTexture
+  private program!: WebGLProgram
+  private quadBuffer!: WebGLBuffer
+  private posBuffer!: WebGLBuffer
+  private sizeBuffer!: WebGLBuffer
+  private rotationBuffer!: WebGLBuffer
+  private colorBuffer!: WebGLBuffer
+  private shapeIndexBuffer!: WebGLBuffer
+  private atlasTexture!: WebGLTexture
+
+  private uViewportSize: WebGLUniformLocation | null = null
+  private uAtlas: WebGLUniformLocation | null = null
+  private uHasAtlas: WebGLUniformLocation | null = null
+  private uShapeCount: WebGLUniformLocation | null = null
 
   private uploadedAtlasVersion = -1
+  private contextLost = false
 
   private posScratch = new Float32Array(0)
   private sizeScratch = new Float32Array(0)
   private colorScratch = new Float32Array(0)
   private shapeIndexScratch = new Float32Array(0)
 
-  private readonly uViewportSize: WebGLUniformLocation | null
-  private readonly uAtlas: WebGLUniformLocation | null
-  private readonly uHasAtlas: WebGLUniformLocation | null
-  private readonly uShapeCount: WebGLUniformLocation | null
+  private readonly handleContextLost = (event: Event): void => {
+    // Prevents the default (which would permanently forfeit restoration) and
+    // tells the browser we intend to recover.
+    event.preventDefault()
+    this.contextLost = true
+    this.callbacks.onContextLost?.()
+  }
 
-  constructor(canvas: HTMLCanvasElement) {
+  private readonly handleContextRestored = (): void => {
+    this.initializeGLResources()
+    this.contextLost = false
+    this.callbacks.onContextRestored?.()
+  }
+
+  constructor(canvas: HTMLCanvasElement, callbacks: WebGLRendererCallbacks = {}) {
+    this.canvas = canvas
+    this.callbacks = callbacks
+
     const gl = canvas.getContext('webgl2', { premultipliedAlpha: false, alpha: true })
     if (!gl) throw new Error('WebGL2 unavailable')
     this.gl = gl
+
+    canvas.addEventListener('webglcontextlost', this.handleContextLost, false)
+    canvas.addEventListener('webglcontextrestored', this.handleContextRestored, false)
+
+    this.initializeGLResources()
+  }
+
+  /** (Re)creates every GL resource against the current context. Called on construction and after a restore. */
+  private initializeGLResources(): void {
+    const gl = this.gl
 
     this.program = createProgram(gl, VERTEX_SHADER_SOURCE, FRAGMENT_SHADER_SOURCE)
     gl.useProgram(this.program)
@@ -82,9 +127,15 @@ export class WebGLRenderer implements RendererBase {
 
     gl.enable(gl.BLEND)
     gl.blendFunc(gl.SRC_ALPHA, gl.ONE_MINUS_SRC_ALPHA)
+
+    // The old GPU texture is gone even though the atlas canvas (plain JS/CPU
+    // memory) survived the context loss untouched — force a re-upload next draw.
+    this.uploadedAtlasVersion = -1
   }
 
   draw(buffer: CellBuffer, binCount: number, atlas: ShapeAtlas | null, options: RenderOptions): void {
+    if (this.contextLost || this.gl.isContextLost()) return
+
     const gl = this.gl
     const { width, height, background } = options
     const hasAtlas = Boolean(atlas && atlas.count > 0)
@@ -170,7 +221,11 @@ export class WebGLRenderer implements RendererBase {
   }
 
   dispose(): void {
+    this.canvas.removeEventListener('webglcontextlost', this.handleContextLost)
+    this.canvas.removeEventListener('webglcontextrestored', this.handleContextRestored)
+
     const gl = this.gl
+    if (gl.isContextLost()) return
     gl.deleteBuffer(this.quadBuffer)
     gl.deleteBuffer(this.posBuffer)
     gl.deleteBuffer(this.sizeBuffer)

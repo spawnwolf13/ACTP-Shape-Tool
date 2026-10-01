@@ -1,7 +1,7 @@
 import { useEffect, useRef } from 'react'
 
 import { createCellBuffer, ensureCellBufferSize, type CellBuffer } from '../../core/grid/CellBuffer'
-import { computeGridLayout } from '../../core/grid/GridModel'
+import { applyNoise, computeGridLayout } from '../../core/grid/GridModel'
 import { applyLuminanceRotation, applyToneFilters, computeLuminance, quantizeToShapeIndex } from '../../core/quantize/Quantizer'
 import { equalWidthThresholds } from '../../core/quantize/Thresholds'
 import { Canvas2DRenderer } from '../../core/render/Canvas2DRenderer'
@@ -68,7 +68,7 @@ export function shouldUseWebGL(cols: number, rows: number, mediaType: string | n
  * hidden/backgrounded tabs.
  */
 export function renderFrame(renderer: RendererBase, onAtlasReady?: () => void): void {
-  const { grid, media, color, filters, shapes } = appStore.getState()
+  const { grid, media, color, filters, noise, shapes } = appStore.getState()
 
   ensureAtlas(shapes.slots, () => onAtlasReady?.())
 
@@ -76,6 +76,7 @@ export function renderFrame(renderer: RendererBase, onAtlasReady?: () => void): 
 
   buffer = ensureCellBufferSize(buffer, grid.density.cols, grid.density.rows)
   computeGridLayout(buffer, grid)
+  applyNoise(buffer, noise)
 
   const source = resourceRegistry.get<CanvasImageSource>(media.resourceId)
   if (source) {
@@ -122,15 +123,27 @@ export function Viewport() {
     if (!canvas2DEl || !webglEl) return
 
     const canvas2DRenderer = new Canvas2DRenderer(canvas2DEl)
-    let webglRenderer: WebGLRenderer | null = null
-    try {
-      webglRenderer = new WebGLRenderer(webglEl)
-    } catch (error) {
-      console.warn('WebGLRenderer unavailable, falling back to Canvas2D only:', error)
-    }
 
     let dirty = true
     let rafId = 0
+    let webglContextLost = false
+    let webglRenderer: WebGLRenderer | null = null
+    try {
+      webglRenderer = new WebGLRenderer(webglEl, {
+        // Context loss is normal (tab backgrounded, GPU reset) — fall back to
+        // Canvas2D immediately rather than leaving a frozen/black canvas.
+        onContextLost: () => {
+          webglContextLost = true
+          dirty = true
+        },
+        onContextRestored: () => {
+          webglContextLost = false
+          dirty = true
+        },
+      })
+    } catch (error) {
+      console.warn('WebGLRenderer unavailable, falling back to Canvas2D only:', error)
+    }
     const unsubscribe = appStore.subscribe(() => {
       dirty = true
     })
@@ -141,7 +154,8 @@ export function Viewport() {
       dirty = false
 
       const { grid, media } = appStore.getState()
-      const useWebGL = Boolean(webglRenderer) && shouldUseWebGL(grid.density.cols, grid.density.rows, media.type)
+      const useWebGL =
+        Boolean(webglRenderer) && !webglContextLost && shouldUseWebGL(grid.density.cols, grid.density.rows, media.type)
 
       canvas2DEl!.style.display = useWebGL ? 'none' : 'block'
       webglEl!.style.display = useWebGL ? 'block' : 'none'
