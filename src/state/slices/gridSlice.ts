@@ -6,7 +6,8 @@ export function defaultGridState(): GridState {
     cellAspect: 'square',
     customAspectRatio: 1,
     radialOffset: { x: 0.5, y: 0.5 },
-    falloffRadius: 1,
+    // 0 = disabled (full scale everywhere); see GridModel's falloff formula.
+    falloffRadius: 0,
     rotation: { global: 0, mode: 'none' },
     thresholds: [],
   }
