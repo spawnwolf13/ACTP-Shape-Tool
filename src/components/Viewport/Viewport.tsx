@@ -10,9 +10,10 @@ import { buildShapeAtlas, type ShapeAtlas } from '../../core/render/ShapeAtlas'
 import { applyForegroundTint } from '../../core/render/Tint'
 import { WebGLRenderer } from '../../core/render/WebGLRenderer'
 import { MediaSampler } from '../../core/sampling/MediaSampler'
+import { startVideoFrameLoop, type VideoFrameLoopHandle } from '../../core/sampling/VideoFrameLoop'
 import { resourceRegistry } from '../../state/resources/ResourceRegistry'
 import { appStore } from '../../state/store'
-import type { ShapeSlot } from '../../types'
+import type { MediaType, ShapeSlot } from '../../types'
 
 export const VIEWPORT_WIDTH = 768
 export const VIEWPORT_HEIGHT = 768
@@ -56,8 +57,12 @@ function ensureAtlas(slots: ShapeSlot[], onReady: () => void): void {
     })
 }
 
-export function shouldUseWebGL(cols: number, rows: number, mediaType: string | null): boolean {
-  return cols * rows > WEBGL_CELL_THRESHOLD || mediaType === 'video'
+function isLiveSource(mediaType: MediaType): boolean {
+  return mediaType === 'video' || mediaType === 'webcam'
+}
+
+export function shouldUseWebGL(cols: number, rows: number, mediaType: MediaType): boolean {
+  return cols * rows > WEBGL_CELL_THRESHOLD || isLiveSource(mediaType)
 }
 
 /**
@@ -104,6 +109,20 @@ export function renderFrame(renderer: RendererBase, onAtlasReady?: () => void): 
   })
 }
 
+/** Snapshot of exactly what was last rendered — exporters build from this instead of re-running the pipeline. */
+export function getCurrentFrame(): { buffer: CellBuffer; atlas: ShapeAtlas | null; binCount: number } {
+  const { shapes } = appStore.getState()
+  const binCount = shapes.slots.length > 0 ? shapes.slots.length : PLACEHOLDER_BIN_COUNT
+  return { buffer, atlas: shapes.slots.length > 0 ? atlas : null, binCount }
+}
+
+let activeCanvasEl: HTMLCanvasElement | null = null
+
+/** The canvas currently being drawn to by the live rAF loop (Canvas2D or WebGL) — the correct one to captureStream(). */
+export function getActiveCanvas(): HTMLCanvasElement | null {
+  return activeCanvasEl
+}
+
 /**
  * Owns two stacked canvases (Canvas2D + WebGL) directly on the main thread,
  * each driven by an imperative requestAnimationFrame loop subscribed to the
@@ -148,6 +167,41 @@ export function Viewport() {
       dirty = true
     })
 
+    // Live video/webcam content changes every frame even when the store
+    // doesn't — a dedicated per-video-frame loop keeps the viewport dirty
+    // while such a source is playing, independent of store subscriptions.
+    let videoLoop: VideoFrameLoopHandle | null = null
+    let videoLoopResourceId: string | null = null
+
+    function syncVideoLoop(): void {
+      const { media } = appStore.getState()
+      const shouldRun = isLiveSource(media.type) && media.isPlaying && Boolean(media.resourceId)
+
+      if (!shouldRun) {
+        if (videoLoop) {
+          videoLoop.stop()
+          videoLoop = null
+          videoLoopResourceId = null
+        }
+        return
+      }
+
+      if (videoLoopResourceId === media.resourceId && videoLoop) return
+
+      videoLoop?.stop()
+      videoLoop = null
+      const element = resourceRegistry.get<HTMLVideoElement>(media.resourceId)
+      if (element instanceof HTMLVideoElement) {
+        videoLoop = startVideoFrameLoop(element, () => {
+          dirty = true
+        })
+        videoLoopResourceId = media.resourceId
+      }
+    }
+
+    const unsubscribeMedia = appStore.subscribe((state) => state.media, syncVideoLoop)
+    syncVideoLoop()
+
     function frame() {
       rafId = requestAnimationFrame(frame)
       if (!dirty) return
@@ -159,6 +213,7 @@ export function Viewport() {
 
       canvas2DEl!.style.display = useWebGL ? 'none' : 'block'
       webglEl!.style.display = useWebGL ? 'block' : 'none'
+      activeCanvasEl = useWebGL ? webglEl! : canvas2DEl!
 
       renderFrame(useWebGL ? webglRenderer! : canvas2DRenderer, () => {
         dirty = true
@@ -170,6 +225,8 @@ export function Viewport() {
     return () => {
       cancelAnimationFrame(rafId)
       unsubscribe()
+      unsubscribeMedia()
+      videoLoop?.stop()
       webglRenderer?.dispose()
     }
   }, [])

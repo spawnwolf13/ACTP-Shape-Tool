@@ -1,4 +1,7 @@
+import { ExportBar } from './components/ExportBar/ExportBar'
 import { MediaDropzone } from './components/MediaIngestion/MediaDropzone'
+import { PlaybackControls } from './components/MediaIngestion/PlaybackControls'
+import { WebcamCapture } from './components/MediaIngestion/WebcamCapture'
 import { ShapeSlotList } from './components/ShapeUploader/ShapeSlotList'
 import { ShapeUploader } from './components/ShapeUploader/ShapeUploader'
 import { Sidebar } from './components/Sidebar/Sidebar'
@@ -12,7 +15,11 @@ function App() {
 
         <div className="flex flex-wrap items-center justify-center gap-3 rounded-lg border border-neutral-800 bg-neutral-900 px-4 py-3">
           <MediaDropzone />
+          <WebcamCapture />
+          <PlaybackControls />
         </div>
+
+        <ExportBar />
 
         <div className="flex w-full max-w-2xl flex-col gap-2 rounded-lg border border-neutral-800 bg-neutral-900 px-4 py-3">
           <div className="flex items-center justify-between">
