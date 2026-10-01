@@ -1,4 +1,4 @@
-import type { CellBuffer } from '../grid/CellBuffer'
+import { BLANK_SHAPE_INDEX, type CellBuffer } from '../grid/CellBuffer'
 import type { RendererBase, RenderOptions } from './RendererBase'
 import type { ShapeAtlas } from './ShapeAtlas'
 import { FRAGMENT_SHADER_SOURCE } from './shaders/instanced.frag'
@@ -153,16 +153,20 @@ export class WebGLRenderer implements RendererBase {
     const baseSize = Math.min(cellWidth, cellHeight) * 0.9
 
     for (let i = 0; i < count; i++) {
+      const isBlank = buffer.shapeIndex[i] === BLANK_SHAPE_INDEX
+
       this.posScratch[i * 2] = buffer.posX[i] * width
       this.posScratch[i * 2 + 1] = buffer.posY[i] * height
-      this.sizeScratch[i] = baseSize * buffer.scale[i]
+      // A zero-size instance is a degenerate (invisible) quad — cheaper than
+      // branching per-instance inside the single instanced draw call below.
+      this.sizeScratch[i] = isBlank ? 0 : baseSize * buffer.scale[i]
 
       this.colorScratch[i * 4] = buffer.colorR[i] / 255
       this.colorScratch[i * 4 + 1] = buffer.colorG[i] / 255
       this.colorScratch[i * 4 + 2] = buffer.colorB[i] / 255
       this.colorScratch[i * 4 + 3] = buffer.colorA[i] / 255
 
-      this.shapeIndexScratch[i] = Math.min(buffer.shapeIndex[i], atlas.count - 1)
+      this.shapeIndexScratch[i] = isBlank ? 0 : Math.min(buffer.shapeIndex[i], atlas.count - 1)
     }
 
     gl.useProgram(this.program)

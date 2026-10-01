@@ -1,5 +1,6 @@
 import { useRef } from 'react'
 
+import { parseSVGVectorSource } from '../../core/render/VectorSource'
 import { useAppActions, useStoreSlice } from '../../hooks/useStoreSlice'
 import { resourceRegistry } from '../../state/resources/ResourceRegistry'
 import { SHAPE_SLOT_COUNT, type ShapeSlot, type ShapeSourceType } from '../../types'
@@ -43,10 +44,18 @@ function ShapeSlotBox({ index, slot }: ShapeSlotBoxProps) {
     if (slot) resourceRegistry.release(slot.resourceId)
     const resourceId = resourceRegistry.register(img)
 
+    const sourceType = sourceTypeFromFile(file)
+    if (sourceType === 'svg') {
+      // Keep the original vector markup alongside the raster preview so SVG
+      // export can stamp real paths instead of rasterizing this shape.
+      const vectorSource = parseSVGVectorSource(await file.text(), resourceId)
+      if (vectorSource) resourceRegistry.registerVectorSource(resourceId, vectorSource)
+    }
+
     const newSlot: ShapeSlot = {
       id: slot?.id ?? crypto.randomUUID(),
       name: file.name,
-      sourceType: sourceTypeFromFile(file),
+      sourceType,
       resourceId,
     }
     actions.setPath(['shapes', 'slots', index], newSlot, { immediate: true, label: `Shape slot ${index + 1}` })

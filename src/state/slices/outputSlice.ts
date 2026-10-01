@@ -5,5 +5,8 @@ export function defaultOutputState(): OutputState {
     preset: '1:1',
     customWidth: 1024,
     customHeight: 1024,
+    fitMode: 'cover',
+    panX: 0,
+    panY: 0,
   }
 }

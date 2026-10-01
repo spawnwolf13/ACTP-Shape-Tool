@@ -1,5 +1,24 @@
 export type ThresholdStrategy = 'equalWidth' | 'equalizeHistogram'
 
+/** Luminance at/above this is reserved as blank highlight space — see defaultLuminanceThresholds. */
+export const HIGHLIGHT_CUTOFF = 0.85
+
+/**
+ * Darkest-first cut points for `shapeSlotCount` shape brackets plus one
+ * blank highlight bracket above `highlightCutoff` — length = shapeSlotCount,
+ * with the final entry always equal to `highlightCutoff` itself. The shape
+ * brackets equally split [0, highlightCutoff), matching the spec's "map
+ * strictly across the remaining luminance range" requirement.
+ */
+export function defaultLuminanceThresholds(shapeSlotCount: number, highlightCutoff = HIGHLIGHT_CUTOFF): number[] {
+  if (shapeSlotCount <= 0) return []
+  const thresholds: number[] = []
+  for (let i = 1; i <= shapeSlotCount; i++) {
+    thresholds.push((highlightCutoff * i) / shapeSlotCount)
+  }
+  return thresholds
+}
+
 /** Equal-width cut points in (0,1) for `binCount` bins, darkest-first. */
 export function equalWidthThresholds(binCount: number): number[] {
   if (binCount <= 1) return []

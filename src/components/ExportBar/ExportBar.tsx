@@ -3,8 +3,9 @@ import { useEffect, useRef, useState } from 'react'
 import { exportImage, type ExportScale } from '../../core/export/ImageExporter'
 import { exportSVG } from '../../core/export/SVGExporter'
 import { pickSupportedMimeType, VideoRecorder } from '../../core/export/VideoRecorder'
-import { getActiveCanvas, getCurrentFrame, getViewportSize } from '../Viewport/Viewport'
+import { buildExportBuffer, getActiveCanvas, getCurrentFrame, getViewportSize } from '../Viewport/Viewport'
 import { useStoreSlice } from '../../hooks/useStoreSlice'
+import { appStore } from '../../state/store'
 import { Button } from '../common/Button'
 import { RecordingIndicator } from './RecordingIndicator'
 
@@ -18,9 +19,10 @@ function downloadBlob(blob: Blob, filename: string): void {
 }
 
 function buildSVGString(background: { r: number; g: number; b: number; a: number }): string {
-  const { buffer, atlas } = getCurrentFrame()
+  const buffer = buildExportBuffer()
+  const { shapes } = appStore.getState()
   const size = getViewportSize()
-  return exportSVG(buffer, atlas, { width: size.width, height: size.height, background })
+  return exportSVG(buffer, shapes.slots, { width: size.width, height: size.height, background })
 }
 
 /** Save as SVG, copy SVG to clipboard, download PNG at 1x/2x/4x, and record the live canvas to video. */

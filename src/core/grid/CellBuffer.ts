@@ -14,7 +14,7 @@ export interface CellBuffer {
   posY: Float32Array
   /** [0,1], post tone-filter luminance used for quantization. */
   luminance: Float32Array
-  /** Shape slot index this cell quantized to; 0 = darkest bin. */
+  /** Shape slot index this cell quantized to (0 = darkest), or BLANK_SHAPE_INDEX for the blank highlight bin. */
   shapeIndex: Uint8Array
   /** Radians. */
   rotation: Float32Array
@@ -25,6 +25,9 @@ export interface CellBuffer {
   colorB: Uint8Array
   colorA: Uint8Array
 }
+
+/** Sentinel shapeIndex meaning "no shape — render background only" (the blank/highlight luminance bracket). */
+export const BLANK_SHAPE_INDEX = 255
 
 export function createCellBuffer(cols: number, rows: number): CellBuffer {
   const safeCols = Math.max(1, Math.floor(cols))

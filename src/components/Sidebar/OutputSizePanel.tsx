@@ -1,6 +1,7 @@
 import { useAppActions, useStoreSlice } from '../../hooks/useStoreSlice'
-import type { AspectPreset } from '../../types'
+import type { AspectPreset, FitMode } from '../../types'
 import { Button } from '../common/Button'
+import { Slider } from '../common/Slider'
 
 const PRESETS: { id: AspectPreset; label: string }[] = [
   { id: '1:1', label: '1:1 Square' },
@@ -8,6 +9,11 @@ const PRESETS: { id: AspectPreset; label: string }[] = [
   { id: '9:16', label: '9:16 Story/Reel' },
   { id: '4:3', label: '4:3' },
   { id: 'custom', label: 'Custom' },
+]
+
+const FIT_MODES: { id: FitMode; label: string; description: string }[] = [
+  { id: 'cover', label: 'Cover', description: 'Fills the canvas, cropping the source' },
+  { id: 'contain', label: 'Contain', description: 'Shows the full source, letterboxed' },
 ]
 
 export function OutputSizePanel() {
@@ -63,6 +69,43 @@ export function OutputSizePanel() {
           </label>
         </div>
       )}
+
+      <div className="flex flex-col gap-2 border-t border-neutral-800 pt-2">
+        <span className="text-xs text-neutral-500">Image Framing</span>
+        <div className="grid grid-cols-2 gap-2">
+          {FIT_MODES.map((mode) => (
+            <Button
+              key={mode.id}
+              variant={output.fitMode === mode.id ? 'active' : 'default'}
+              title={mode.description}
+              onClick={() => actions.setPath(['output', 'fitMode'], mode.id, { immediate: true, label: 'Fit mode' })}
+            >
+              {mode.label}
+            </Button>
+          ))}
+        </div>
+
+        <Slider
+          label="Pan X"
+          value={output.panX}
+          min={-1}
+          max={1}
+          step={0.01}
+          formatValue={(v) => v.toFixed(2)}
+          onChange={(v) => actions.setPath(['output', 'panX'], v)}
+          onCommit={() => commit('Pan X')}
+        />
+        <Slider
+          label="Pan Y"
+          value={output.panY}
+          min={-1}
+          max={1}
+          step={0.01}
+          formatValue={(v) => v.toFixed(2)}
+          onChange={(v) => actions.setPath(['output', 'panY'], v)}
+          onCommit={() => commit('Pan Y')}
+        />
+      </div>
     </section>
   )
 }

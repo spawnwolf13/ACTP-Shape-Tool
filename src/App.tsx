@@ -4,9 +4,8 @@ import { Sidebar } from './components/Sidebar/Sidebar'
 import { Viewport } from './components/Viewport/Viewport'
 import { useAppActions, useStoreSlice } from './hooks/useStoreSlice'
 import { loadDefault } from './state/defaults'
-import { resourceRegistry } from './state/resources/ResourceRegistry'
 import { appStore } from './state/store'
-import { createDefaultSourceImage } from './utils/defaultSourceImage'
+import { loadDefaultSampleImage } from './utils/mediaSources'
 
 function App() {
   const slots = useStoreSlice((state) => state.shapes.slots)
@@ -27,13 +26,7 @@ function App() {
       await loadDefault(actions, slots)
 
       if (!appStore.getState().media.resourceId) {
-        const image = await createDefaultSourceImage()
-        const resourceId = resourceRegistry.register(image)
-        actions.setPath(['media', 'type'], 'image', { immediate: true, label: 'Default source' })
-        actions.setPath(['media', 'resourceId'], resourceId, { immediate: true })
-        actions.setPath(['media', 'name'], 'Default gradient', { immediate: true })
-        actions.setPath(['media', 'naturalWidth'], image.naturalWidth, { immediate: true })
-        actions.setPath(['media', 'naturalHeight'], image.naturalHeight, { immediate: true })
+        await loadDefaultSampleImage(actions, null)
       }
     }
     void init()

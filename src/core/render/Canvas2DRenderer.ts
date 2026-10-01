@@ -1,5 +1,5 @@
 import type { RGBA } from '../../types'
-import type { CellBuffer } from '../grid/CellBuffer'
+import { BLANK_SHAPE_INDEX, type CellBuffer } from '../grid/CellBuffer'
 import type { RendererBase, RenderOptions } from './RendererBase'
 import type { ShapeAtlas } from './ShapeAtlas'
 
@@ -10,8 +10,9 @@ import type { ShapeAtlas } from './ShapeAtlas'
  * canvas — compositing ops act on the whole destination, not just what a
  * save()/restore() block drew). An empty shape slot's atlas tile is fully
  * transparent, so those cells simply draw nothing — no separate fallback
- * needed. Only the brief startup window before the first atlas build
- * resolves (atlas === null) skips drawing shapes entirely.
+ * needed. Cells quantized into the blank highlight bin (BLANK_SHAPE_INDEX)
+ * are skipped outright, same as the brief startup window before the first
+ * atlas build resolves (atlas === null).
  */
 export class Canvas2DRenderer implements RendererBase {
   private ctx: CanvasRenderingContext2D
@@ -47,6 +48,8 @@ export class Canvas2DRenderer implements RendererBase {
     const baseSize = Math.min(cellWidth, cellHeight) * 0.9
 
     for (let i = 0; i < buffer.count; i++) {
+      if (buffer.shapeIndex[i] === BLANK_SHAPE_INDEX) continue
+
       const size = baseSize * buffer.scale[i]
       if (size <= 0.5) continue
 

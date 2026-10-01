@@ -3,7 +3,6 @@ import { ColorPanel } from './ColorPanel'
 import { DefaultActions } from './DefaultActions'
 import { FiltersPanel } from './FiltersPanel'
 import { GridPanel } from './GridPanel'
-import { HistoryPanel } from './HistoryPanel'
 import { NoisePanel } from './NoisePanel'
 import { OutputSizePanel } from './OutputSizePanel'
 import { ShapesPanel } from './ShapesPanel'
@@ -16,7 +15,8 @@ const DIVIDER = <hr className="border-neutral-800" />
  * anything else renders meaningfully). Export + the default-state actions
  * are pinned in a non-scrolling footer, per the explicit "always
  * accessible, never pushed off-screen" requirement — everything else lives
- * in the scrollable middle section.
+ * in the scrollable middle section. Undo/Redo lives as a pill overlay on
+ * the viewport itself (see UndoRedoOverlay), not in this scroll list.
  */
 export function Sidebar() {
   return (
@@ -35,8 +35,6 @@ export function Sidebar() {
         <FiltersPanel />
         {DIVIDER}
         <NoisePanel />
-        {DIVIDER}
-        <HistoryPanel />
       </div>
 
       <div className="flex flex-col gap-3 border-t border-neutral-800 p-4">

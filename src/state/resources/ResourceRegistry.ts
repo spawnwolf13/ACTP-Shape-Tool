@@ -1,5 +1,13 @@
 export type ResourceId = string
 
+/** Raw vector content extracted from an uploaded SVG shape, stored alongside its raster preview under the same ResourceId. */
+export interface VectorShapeSource {
+  /** Inner markup (paths/groups/etc.) from the source <svg>, no outer <svg> wrapper — ready to splice into a <symbol>. */
+  innerMarkup: string
+  /** Native viewBox "minX minY width height" from the source SVG (or derived from its width/height attributes). */
+  viewBox: string
+}
+
 /**
  * Keeps non-serializable runtime resources (video elements, ImageBitmaps,
  * decoded SVG markup, GPU textures) out of the Zustand store entirely.
@@ -8,6 +16,8 @@ export type ResourceId = string
  */
 class ResourceRegistry {
   private resources = new Map<ResourceId, unknown>()
+  /** Keyed by the same ResourceId as the raster preview in `resources` — only present for SVG-sourced shapes. */
+  private vectorSources = new Map<ResourceId, VectorShapeSource>()
 
   register<T>(value: T): ResourceId {
     const id = crypto.randomUUID()
@@ -28,9 +38,19 @@ class ResourceRegistry {
     return this.resources.has(id)
   }
 
+  registerVectorSource(id: ResourceId, source: VectorShapeSource): void {
+    this.vectorSources.set(id, source)
+  }
+
+  getVectorSource(id: ResourceId | null | undefined): VectorShapeSource | undefined {
+    if (!id) return undefined
+    return this.vectorSources.get(id)
+  }
+
   release(id: ResourceId | null | undefined): void {
     if (!id) return
     this.resources.delete(id)
+    this.vectorSources.delete(id)
   }
 }
 

@@ -1,3 +1,4 @@
+import { decodeSVGDataUrl, parseSVGVectorSource } from '../core/render/VectorSource'
 import { defaultColorState } from './slices/colorSlice'
 import { defaultFiltersState } from './slices/filtersSlice'
 import { defaultGridState } from './slices/gridSlice'
@@ -47,6 +48,13 @@ async function loadShapeFromDataUrl(dataUrl: string, name: string, sourceType: S
   image.src = dataUrl
   await image.decode()
   const resourceId = resourceRegistry.register(image)
+
+  if (sourceType === 'svg') {
+    const svgText = decodeSVGDataUrl(dataUrl)
+    const vectorSource = svgText ? parseSVGVectorSource(svgText, resourceId) : null
+    if (vectorSource) resourceRegistry.registerVectorSource(resourceId, vectorSource)
+  }
+
   return { id: crypto.randomUUID(), name, sourceType, resourceId }
 }
 
@@ -141,11 +149,20 @@ export async function loadDefault(actions: AppActions, currentSlots: ShapeSlots)
   }
 
   try {
-    const saved = JSON.parse(raw) as SavedDefault
-    const shapeSlots = await loadSavedShapes(saved.shapes)
+    const saved = JSON.parse(raw) as Partial<SavedDefault>
+    const shapeSlots = await loadSavedShapes(saved.shapes ?? [])
     applyParamsAndShapes(
       actions,
-      { grid: saved.grid, color: saved.color, filters: saved.filters, noise: saved.noise, output: saved.output },
+      {
+        // Spread over fresh defaults so a localStorage default saved before
+        // a field was added (e.g. brightness, fitMode) doesn't come back
+        // `undefined` and break the pipeline.
+        grid: { ...defaultGridState(), ...saved.grid },
+        color: { ...defaultColorState(), ...saved.color },
+        filters: { ...defaultFiltersState(), ...saved.filters },
+        noise: { ...defaultNoiseState(), ...saved.noise },
+        output: { ...defaultOutputState(), ...saved.output },
+      },
       shapeSlots,
       currentSlots,
       'Reset to default',

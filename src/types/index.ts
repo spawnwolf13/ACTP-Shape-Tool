@@ -33,7 +33,12 @@ export interface GridState {
   density: { cols: number; rows: number }
   /** Radians. */
   rotation: number
-  /** Cut points in [0,1], length = SHAPE_SLOT_COUNT - 1. Index 0 bin is darkest. */
+  /**
+   * Ascending cut points in [0,1], length = SHAPE_SLOT_COUNT. Bins 0..N-1 map
+   * directly to shape slots 0..N-1 (darkest first); the final threshold is
+   * the highlight cutoff — luminance at or above it falls in the blank bin
+   * (BLANK_SHAPE_INDEX) and renders background only, no shape.
+   */
   thresholds: number[]
 }
 
@@ -53,6 +58,10 @@ export interface ColorState {
 export interface FiltersState {
   /** -1..1 */
   contrast: number
+  /** -1..1 */
+  brightness: number
+  /** false = bypass the mosaic pipeline and preview the raw source media directly, for quick A/B comparison. */
+  effectEnabled: boolean
 }
 
 export interface NoiseState {
@@ -63,10 +72,18 @@ export interface NoiseState {
 
 export type AspectPreset = '1:1' | '16:9' | '9:16' | '4:3' | 'custom'
 
+/** 'cover' crops the source to fill the output frame; 'contain' shows the full source, letterboxed. */
+export type FitMode = 'cover' | 'contain'
+
 export interface OutputState {
   preset: AspectPreset
   customWidth: number
   customHeight: number
+  fitMode: FitMode
+  /** -1..1, position within the available crop (cover) or letterbox (contain) margin. */
+  panX: number
+  /** -1..1, position within the available crop (cover) or letterbox (contain) margin. */
+  panY: number
 }
 
 export type RecordingFormat = 'webm' | 'mp4' | null
