@@ -1,4 +1,6 @@
 import { MediaDropzone } from './components/MediaIngestion/MediaDropzone'
+import { ShapeSlotList } from './components/ShapeUploader/ShapeSlotList'
+import { ShapeUploader } from './components/ShapeUploader/ShapeUploader'
 import { Viewport } from './components/Viewport/Viewport'
 import { useAppActions, useStoreSlice } from './hooks/useStoreSlice'
 
@@ -42,6 +44,14 @@ function App() {
         <button className="rounded bg-indigo-700 px-3 py-1 hover:bg-indigo-600" onClick={() => actions.redo()}>
           Redo
         </button>
+      </div>
+
+      <div className="flex w-full max-w-2xl flex-col gap-2 rounded-lg border border-neutral-800 bg-neutral-900 px-4 py-3">
+        <div className="flex items-center justify-between">
+          <span className="text-neutral-400">Shapes</span>
+          <ShapeUploader />
+        </div>
+        <ShapeSlotList />
       </div>
     </div>
   )
