@@ -2,6 +2,7 @@ import { useEffect, useRef } from 'react'
 
 import { createCellBuffer, ensureCellBufferSize, type CellBuffer } from '../../core/grid/CellBuffer'
 import { applyNoise, computeGridLayout } from '../../core/grid/GridModel'
+import { applyEdgeRotation, applyEdgeScaleModulation, computeSobelEdges } from '../../core/quantize/EdgeDetector'
 import { applyLuminanceRotation, applyToneFilters, computeLuminance, quantizeToShapeIndex } from '../../core/quantize/Quantizer'
 import { equalWidthThresholds } from '../../core/quantize/Thresholds'
 import { Canvas2DRenderer } from '../../core/render/Canvas2DRenderer'
@@ -95,7 +96,20 @@ export function renderFrame(renderer: RendererBase, onAtlasReady?: () => void): 
 
   computeLuminance(buffer)
   applyToneFilters(buffer, filters)
+
+  // Either control can independently request the Sobel pass: the Filters
+  // panel toggle (drives scale modulation) and the Grid panel's "By edge"
+  // rotation mode are deliberately decoupled, same as "By luminance" is its
+  // own independent rotation mode.
+  if (filters.edgeDetection.enabled || grid.rotation.mode === 'edge') {
+    computeSobelEdges(buffer)
+  }
+  if (filters.edgeDetection.enabled) {
+    applyEdgeScaleModulation(buffer, { threshold: filters.edgeDetection.threshold })
+  }
   if (grid.rotation.mode === 'luminance') applyLuminanceRotation(buffer)
+  else if (grid.rotation.mode === 'edge') applyEdgeRotation(buffer)
+
   applyForegroundTint(buffer, color)
 
   const thresholds = grid.thresholds.length === binCount - 1 ? grid.thresholds : equalWidthThresholds(binCount)

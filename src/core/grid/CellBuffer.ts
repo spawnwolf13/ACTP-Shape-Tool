@@ -24,8 +24,10 @@ export interface CellBuffer {
   colorG: Uint8Array
   colorB: Uint8Array
   colorA: Uint8Array
-  /** Populated only when edge detection is enabled; 0 otherwise. */
+  /** Populated only when edge detection runs; normalized ~[0,1] gradient magnitude, 0 otherwise. */
   edgeMagnitude: Float32Array
+  /** Populated only when edge detection runs; Sobel gradient orientation theta = atan2(Gy, Gx), radians. */
+  edgeAngle: Float32Array
 }
 
 export function createCellBuffer(cols: number, rows: number): CellBuffer {
@@ -47,6 +49,7 @@ export function createCellBuffer(cols: number, rows: number): CellBuffer {
     colorB: new Uint8Array(count),
     colorA: new Uint8Array(count),
     edgeMagnitude: new Float32Array(count),
+    edgeAngle: new Float32Array(count),
   }
 }
 

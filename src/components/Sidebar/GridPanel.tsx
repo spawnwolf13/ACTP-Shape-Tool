@@ -20,7 +20,7 @@ export function GridPanel() {
         min={16}
         max={256}
         step={8}
-        formatValue={(v) => `${v}×${v}`}
+        formatValue={() => `${grid.density.cols}×${grid.density.rows}`}
         onChange={(v) => {
           actions.setPath(['grid', 'density', 'cols'], v)
           actions.setPath(['grid', 'density', 'rows'], v)
@@ -115,7 +115,7 @@ export function GridPanel() {
         >
           <option value="none">Fixed</option>
           <option value="luminance">By luminance</option>
-          <option value="edge">By edge (coming soon)</option>
+          <option value="edge">By edge</option>
         </select>
       </label>
     </section>
