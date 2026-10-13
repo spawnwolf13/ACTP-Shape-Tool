@@ -12,13 +12,18 @@ import type { ColorState, FiltersState, GridState, NoiseState, OutputState, Shap
 
 const STORAGE_KEY = 'mosaic-shape-mapper:default-v1'
 
-/** The only remaining built-in look: a clean geometric set, darkest-bin-first. */
+/**
+ * The only remaining built-in look: a clean geometric set, darkest-bin-first.
+ * Prefixed with Vite's BASE_URL (not a bare "/...") since this is a plain
+ * runtime fetch(), not an index.html reference Vite rewrites automatically —
+ * on GitHub Pages the app is served from /ACTP-Shape-Tool/, not the domain root.
+ */
 const BUILT_IN_SHAPE_PATHS = [
-  '/presets/bauhaus/square.svg',
-  '/presets/bauhaus/circle.svg',
-  '/presets/bauhaus/triangle.svg',
-  '/presets/bauhaus/diagonal-bar.svg',
-]
+  'presets/bauhaus/square.svg',
+  'presets/bauhaus/circle.svg',
+  'presets/bauhaus/triangle.svg',
+  'presets/bauhaus/diagonal-bar.svg',
+].map((path) => `${import.meta.env.BASE_URL}${path}`)
 
 interface SerializedShape {
   name: string
